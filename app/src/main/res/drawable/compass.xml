@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- 外圆 -->
+    <path
+        android:pathData="M100,10 A90,90 0 1,1 99.9,10"
+        android:strokeWidth="4"
+        android:strokeColor="#333333"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- 刻度线 -->
+    <path
+        android:pathData="M100,15 L100,25"
+        android:strokeWidth="3"
+        android:strokeColor="#FF0000"/>
+
+    <path
+        android:pathData="M100,175 L100,185"
+        android:strokeWidth="2"
+        android:strokeColor="#333333"/>
+
+    <path
+        android:pathData="M15,100 L25,100"
+        android:strokeWidth="2"
+        android:strokeColor="#333333"/>
+
+    <path
+        android:pathData="M175,100 L185,100"
+        android:strokeWidth="2"
+        android:strokeColor="#333333"/>
+
+    <!-- 北指针 (红色) -->
+    <path
+        android:pathData="M100,100 L90,100 L100,30 L110,100 Z"
+        android:fillColor="#FF0000"/>
+
+    <!-- 南指针 (白色带边框) -->
+    <path
+        android:pathData="M100,100 L90,100 L100,170 L110,100 Z"
+        android:fillColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:strokeColor="#333333"/>
+
+    <!-- 中心圆 -->
+    <path
+        android:pathData="M100,100 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0"
+        android:fillColor="#333333"/>
+
+    <!-- 方向文字 N -->
+    <path
+        android:pathData="M95,45 L95,55 L100,50 L105,55 L105,45"
+        android:strokeWidth="2"
+        android:strokeColor="#FF0000"
+        android:fillColor="#00000000"/>
+
+</vector>

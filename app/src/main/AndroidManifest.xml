@@ -49,6 +49,12 @@
             android:value="88c3f43b9b16ee1f83f6ffa65beb8439" />
 
         <service android:name="com.amap.api.location.APSService" />
+        
+        <service
+            android:name=".RunningService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
 </manifest>

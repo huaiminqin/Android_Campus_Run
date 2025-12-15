@@ -1,16 +1,19 @@
 package com.example.myapplication;
 
 import android.Manifest;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -27,32 +30,25 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
-import com.amap.api.location.AMapLocation;
 import com.amap.api.location.AMapLocationClient;
-import com.amap.api.location.AMapLocationClientOption;
-import com.amap.api.location.AMapLocationListener;
 import com.amap.api.maps.AMap;
 import com.amap.api.maps.CameraUpdateFactory;
 import com.amap.api.maps.MapView;
 import com.amap.api.maps.MapsInitializer;
 import com.amap.api.maps.model.LatLng;
-import com.amap.api.maps.model.PolylineOptions;
 import com.amap.api.maps.model.Polyline;
+import com.amap.api.maps.model.PolylineOptions;
 
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public class RunFragment extends Fragment implements AMapLocationListener, SensorEventListener {
+public class RunFragment extends Fragment implements SensorEventListener {
 
     private static final String TAG = "RunFragment";
     private static final int PERMISSION_REQUEST_CODE = 1001;
 
     private MapView mapView;
     private AMap aMap;
-    private AMapLocationClient locationClient;
     private Polyline trackPolyline;
 
     private TextView tvDistance, tvDuration, tvPace, tvSteps, tvCalories;
@@ -60,44 +56,79 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
     private ImageView ivCompass;
 
     private SensorManager sensorManager;
-    private Sensor accelerometer, magnetometer, stepCounter;
+    private Sensor accelerometer, magnetometer;
     private float[] gravity = new float[3];
     private float[] geomagnetic = new float[3];
     private float currentDegree = 0f;
 
-    // ========== 计步算法参数 ==========
-    private static final float STEP_THRESHOLD = 5.0f;  // 阈值调高，减少误触发
-    private static final long MIN_STEP_INTERVAL_MS = 450;  // 最小步间隔250ms
-    private float lastMagnitude = 0;
-    private long lastStepTimeMs = 0;
-    private boolean isRising = false;
-    private int stepCountManual = 0;
-    
-    // ========== 卡尔曼滤波GPS参数 ==========
-    private double kalmanLat = 0, kalmanLng = 0;
-    private double kalmanVariance = 1;
-    private static final double KALMAN_Q = 0.00001;  // 过程噪声
-    private boolean kalmanInitialized = false;
-    private long lastLocationTime = 0;
-    private float lastSpeed = 0;
 
-    private boolean isRunning = false;
-    private boolean isPaused = false;
-    private long startTime = 0;
-    private long pausedDuration = 0;
-    private long pauseStartTime = 0;
-    private int stepCount = 0;
-    private int initialStepCount = -1;
-    private boolean useSystemStepCounter = false;  // 强制使用加速度计算法
-    private double totalDistance = 0;
-    private LatLng lastLocation = null;
-    private List<LatLng> trackPoints = new ArrayList<>();
 
-    private Handler handler = new Handler(Looper.getMainLooper());
-    private Runnable timerRunnable;
     private RunDataManager dataManager;
     private DatabaseHelper dbHelper;
+    
+    // 服务绑定
+    private RunningService runningService;
+    private boolean serviceBound = false;
 
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            RunningService.RunningBinder binder = (RunningService.RunningBinder) service;
+            runningService = binder.getService();
+            serviceBound = true;
+            
+            runningService.setListener(new RunningService.OnRunningUpdateListener() {
+                @Override
+                public void onTimeUpdate(long elapsedSeconds) {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            int hours = (int) (elapsedSeconds / 3600);
+                            int minutes = (int) ((elapsedSeconds % 3600) / 60);
+                            int secs = (int) (elapsedSeconds % 60);
+                            tvDuration.setText(String.format(Locale.CHINA, "%02d:%02d:%02d", hours, minutes, secs));
+                            updateCaloriesAndPace();
+                        });
+                    }
+                }
+
+                @Override
+                public void onDistanceUpdate(double distance) {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            tvDistance.setText(String.format(Locale.CHINA, "%.2f", distance / 1000));
+                            updateCaloriesAndPace();
+                        });
+                    }
+                }
+
+                @Override
+                public void onLocationUpdate(LatLng location, List<LatLng> track) {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (aMap != null) {
+                                aMap.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 17));
+                            }
+                            drawTrack(track);
+                        });
+                    }
+                }
+            });
+            
+            // 恢复UI状态
+            restoreUIState();
+            
+            // 立即更新一次步数显示
+            if (runningService.isRunning()) {
+                tvSteps.setText(String.valueOf(runningService.getStepCount()));
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            serviceBound = false;
+            runningService = null;
+        }
+    };
 
     @Nullable
     @Override
@@ -140,16 +171,6 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         btnStart.setOnClickListener(v -> startRunning());
         btnPause.setOnClickListener(v -> togglePause());
         btnStop.setOnClickListener(v -> stopRunning());
-
-        timerRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning && !isPaused) {
-                    updateDuration();
-                    handler.postDelayed(this, 1000);
-                }
-            }
-        };
     }
 
     private void initMap(View view, Bundle savedInstanceState) {
@@ -172,11 +193,6 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         sensorManager = (SensorManager) requireContext().getSystemService(Context.SENSOR_SERVICE);
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-        stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-        
-        // 强制使用加速度计算法，不用系统计步器（系统计步器需要真正走路，晃动不计步）
-        useSystemStepCounter = false;
-        Log.d(TAG, "Force using accelerometer step detection");
     }
 
     private void checkPermissions() {
@@ -188,50 +204,22 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
                 break;
             }
         }
-        if (allGranted) {
-            initLocation();
-        } else {
+        if (!allGranted) {
             requestPermissions(permissions, PERMISSION_REQUEST_CODE);
         }
     }
 
-    private void initLocation() {
-        try {
-            locationClient = new AMapLocationClient(requireContext());
-            locationClient.setLocationListener(this);
-            AMapLocationClientOption option = new AMapLocationClientOption();
-            option.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);
-            option.setInterval(1000);  // 1秒定位一次，提高轨迹精度
-            option.setNeedAddress(false);
-            locationClient.setLocationOption(option);
-            locationClient.startLocation();
-        } catch (Exception e) {
-            Log.e(TAG, "Location init failed", e);
-        }
-    }
-
     private void startRunning() {
-        isRunning = true;
-        isPaused = false;
-        startTime = System.currentTimeMillis();
-        pausedDuration = 0;
-        totalDistance = 0;
-        stepCount = 0;
-        stepCountManual = 0;
-        initialStepCount = -1;
-        trackPoints.clear();
-        lastLocation = null;
+        // 启动前台服务
+        Intent serviceIntent = new Intent(requireContext(), RunningService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            requireContext().startForegroundService(serviceIntent);
+        } else {
+            requireContext().startService(serviceIntent);
+        }
+        requireContext().bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE);
         
-        // 重置卡尔曼滤波
-        kalmanInitialized = false;
-        kalmanVariance = 1;
-        
-        // 重置计步参数
-        lastStepTimeMs = 0;
-        lastMagnitude = 0;
-        isRising = false;
-        
-        // 只清除轨迹线，不清除定位蓝点
+        // 清除轨迹线
         if (trackPolyline != null) {
             trackPolyline.remove();
             trackPolyline = null;
@@ -242,63 +230,59 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         btnStop.setVisibility(View.VISIBLE);
         btnPause.setText("暂停");
 
-        handler.post(timerRunnable);
+        // 延迟启动服务中的跑步
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if (serviceBound && runningService != null) {
+                runningService.startRunning();
+            }
+        }, 500);
+
         Toast.makeText(requireContext(), "开始跑步!", Toast.LENGTH_SHORT).show();
     }
 
     private void togglePause() {
-        if (isPaused) {
-            isPaused = false;
-            pausedDuration += System.currentTimeMillis() - pauseStartTime;
-            btnPause.setText("暂停");
-            handler.post(timerRunnable);
-        } else {
-            isPaused = true;
-            pauseStartTime = System.currentTimeMillis();
-            btnPause.setText("继续");
+        if (serviceBound && runningService != null) {
+            runningService.togglePause();
+            if (runningService.isPaused()) {
+                btnPause.setText("继续");
+            } else {
+                btnPause.setText("暂停");
+            }
         }
     }
 
     private void stopRunning() {
-        isRunning = false;
-        isPaused = false;
-        handler.removeCallbacks(timerRunnable);
+        if (serviceBound && runningService != null) {
+            RunningService.RunResult result = runningService.stopRunning();
+            
+            // 保存到SQLite数据库（使用服务中的步数）
+            long insertId = dbHelper.insertRunningRecord(
+                1, result.date, result.distance, result.duration,
+                result.steps, result.calories, result.pace, result.track
+            );
+            Log.d(TAG, "保存到SQLite, insertId=" + insertId);
+            
+            // 同时保存到SharedPreferences
+            RunDataManager.RunRecord record = new RunDataManager.RunRecord(
+                result.date, result.distance, result.duration,
+                result.steps, result.calories, result.pace, result.track
+            );
+            dataManager.saveRecord(record);
 
-        long elapsed = System.currentTimeMillis() - startTime - pausedDuration;
-        int duration = (int) (elapsed / 1000);
-        int calories = calculateCalories();
-        double pace = totalDistance > 0 ? (duration / 60.0) / (totalDistance / 1000) : 0;
-        
-        StringBuilder trackStr = new StringBuilder();
-        for (LatLng p : trackPoints) {
-            trackStr.append(p.latitude).append(",").append(p.longitude).append(";");
+            String msg = String.format(Locale.CHINA, "跑步结束!\n距离: %.2f公里\n步数: %d\n消耗: %d千卡",
+                    result.distance / 1000, result.steps, result.calories);
+            Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show();
         }
-
-        String date = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(new Date());
         
-        // 保存到SQLite数据库
-        long insertId = dbHelper.insertRunningRecord(
-            1,  // 默认用户ID
-            date,
-            totalDistance,
-            duration,
-            stepCount,
-            calories,
-            pace,
-            trackStr.toString()
-        );
-        Log.d(TAG, "保存到SQLite, insertId=" + insertId);
-        
-        // 同时保存到SharedPreferences（兼容旧版本）
-        RunDataManager.RunRecord record = new RunDataManager.RunRecord(date, totalDistance, duration, stepCount, calories, pace, trackStr.toString());
-        dataManager.saveRecord(record);
+        // 解绑服务
+        if (serviceBound) {
+            requireContext().unbindService(serviceConnection);
+            serviceBound = false;
+        }
 
         btnStart.setVisibility(View.VISIBLE);
         btnPause.setVisibility(View.GONE);
         btnStop.setVisibility(View.GONE);
-
-        String msg = String.format(Locale.CHINA, "跑步结束!\n距离: %.2f公里\n步数: %d\n消耗: %d千卡", totalDistance / 1000, stepCount, calories);
-        Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show();
 
         tvDistance.setText("0.00");
         tvDuration.setText("00:00:00");
@@ -307,131 +291,52 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         tvCalories.setText("0");
     }
 
-    private void updateDuration() {
-        long elapsed = System.currentTimeMillis() - startTime - pausedDuration;
-        int seconds = (int) (elapsed / 1000);
-        int hours = seconds / 3600;
-        int minutes = (seconds % 3600) / 60;
-        int secs = seconds % 60;
-        tvDuration.setText(String.format(Locale.CHINA, "%02d:%02d:%02d", hours, minutes, secs));
-    }
-
-    private int calculateCalories() {
-        double weight = 70;
-        return (int) (weight * (totalDistance / 1000) * 1.036);
-    }
-
-
-    // ========== 卡尔曼滤波GPS处理 ==========
-    @Override
-    public void onLocationChanged(AMapLocation location) {
-        if (location == null || location.getErrorCode() != 0) return;
-        
-        double lat = location.getLatitude();
-        double lng = location.getLongitude();
-        float accuracy = location.getAccuracy();
-        float speed = location.getSpeed();
-        long currentTime = System.currentTimeMillis();
-        
-        // 应用卡尔曼滤波
-        LatLng filteredLocation = applyKalmanFilter(lat, lng, accuracy, currentTime);
-        
-        if (aMap != null) {
-            aMap.moveCamera(CameraUpdateFactory.newLatLngZoom(filteredLocation, 17));
-        }
-        
-        if (isRunning && !isPaused) {
-            if (lastLocation == null) {
-                trackPoints.add(filteredLocation);
-                lastLocation = filteredLocation;
-                lastLocationTime = currentTime;
-                lastSpeed = speed;
-                return;
-            }
+    private void restoreUIState() {
+        if (runningService != null && runningService.isRunning()) {
+            btnStart.setVisibility(View.GONE);
+            btnPause.setVisibility(View.VISIBLE);
+            btnStop.setVisibility(View.VISIBLE);
+            btnPause.setText(runningService.isPaused() ? "继续" : "暂停");
             
-            double dist = calculateDistance(lastLocation, filteredLocation);
-            long timeDiff = currentTime - lastLocationTime;
+            // 恢复显示数据（从服务获取）
+            double dist = runningService.getTotalDistance();
+            int steps = runningService.getStepCount();
+            tvDistance.setText(String.format(Locale.CHINA, "%.2f", dist / 1000));
+            tvSteps.setText(String.valueOf(steps));
             
-            // 校园跑距离校验规则
-            boolean isValidPoint = validateGpsPoint(dist, accuracy, speed, timeDiff);
+            // 恢复卡路里和配速
+            updateCaloriesAndPace();
             
-            if (isValidPoint && dist > 1) {  // 至少移动1米
-                totalDistance += dist * 2;  // 距离校正系数
-                trackPoints.add(filteredLocation);
-                lastLocation = filteredLocation;
-                lastLocationTime = currentTime;
-                lastSpeed = speed;
-                drawTrack();
-                updateUI();
+            // 恢复轨迹
+            List<LatLng> track = runningService.getTrackPoints();
+            if (track != null && !track.isEmpty()) {
+                drawTrack(track);
+                if (aMap != null) {
+                    aMap.moveCamera(CameraUpdateFactory.newLatLngZoom(track.get(track.size() - 1), 17));
+                }
             }
         }
     }
 
-    // 卡尔曼滤波实现
-    private LatLng applyKalmanFilter(double lat, double lng, float accuracy, long timestamp) {
-        if (!kalmanInitialized) {
-            kalmanLat = lat;
-            kalmanLng = lng;
-            kalmanVariance = accuracy * accuracy;
-            kalmanInitialized = true;
-            return new LatLng(lat, lng);
+    private void updateCaloriesAndPace() {
+        if (runningService != null) {
+            double dist = runningService.getTotalDistance();
+            double weight = 70;
+            int calories = (int) (weight * (dist / 1000) * 1.036);
+            tvCalories.setText(String.valueOf(calories));
+            
+            if (dist > 0) {
+                long elapsed = System.currentTimeMillis() - runningService.getStartTime() - runningService.getPausedDuration();
+                double pace = (elapsed / 60000.0) / (dist / 1000);
+                int paceMin = (int) pace;
+                int paceSec = (int) ((pace - paceMin) * 60);
+                tvPace.setText(String.format(Locale.CHINA, "%d:%02d", paceMin, paceSec));
+            }
         }
-        
-        // 预测步骤
-        kalmanVariance += KALMAN_Q;
-        
-        // 更新步骤
-        double measurementVariance = accuracy * accuracy;
-        double kalmanGain = kalmanVariance / (kalmanVariance + measurementVariance);
-        
-        kalmanLat = kalmanLat + kalmanGain * (lat - kalmanLat);
-        kalmanLng = kalmanLng + kalmanGain * (lng - kalmanLng);
-        kalmanVariance = (1 - kalmanGain) * kalmanVariance;
-        
-        return new LatLng(kalmanLat, kalmanLng);
     }
 
-    // GPS点有效性校验（校园跑核心算法）
-    private boolean validateGpsPoint(double distance, float accuracy, float speed, long timeDiffMs) {
-        // 1. 精度过滤：精度>25米的点不可信
-        if (accuracy > 25) {
-            Log.d(TAG, "GPS filtered: accuracy=" + accuracy);
-            return false;
-        }
-        
-        // 2. 速度校验：计算瞬时速度
-        double calcSpeed = (timeDiffMs > 0) ? (distance / timeDiffMs * 1000) : 0;  // m/s
-        
-        // 跑步速度范围：0.5-12 m/s (1.8-43.2 km/h)
-        // 正常跑步2-6 m/s，冲刺可达10m/s
-        if (calcSpeed > 12) {
-            Log.d(TAG, "GPS filtered: speed too fast=" + calcSpeed + "m/s");
-            return false;
-        }
-        
-        // 3. 距离跳变过滤：单次移动不超过30米（1秒内）
-        double maxDistance = Math.max(30, lastSpeed * timeDiffMs / 1000 * 1.5);
-        if (distance > maxDistance) {
-            Log.d(TAG, "GPS filtered: distance jump=" + distance);
-            return false;
-        }
-        
-        // 4. 静止检测：速度<0.3m/s且距离<2米视为静止
-        if (calcSpeed < 0.3 && distance < 2) {
-            return false;
-        }
-        
-        return true;
-    }
-
-    private double calculateDistance(LatLng p1, LatLng p2) {
-        float[] results = new float[1];
-        android.location.Location.distanceBetween(p1.latitude, p1.longitude, p2.latitude, p2.longitude, results);
-        return results[0];
-    }
-
-    private void drawTrack() {
-        if (trackPoints.size() > 1 && aMap != null) {
+    private void drawTrack(List<LatLng> trackPoints) {
+        if (trackPoints != null && trackPoints.size() > 1 && aMap != null) {
             if (trackPolyline != null) {
                 trackPolyline.setPoints(trackPoints);
             } else {
@@ -444,79 +349,22 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         }
     }
 
-    private void updateUI() {
-        tvDistance.setText(String.format(Locale.CHINA, "%.2f", totalDistance / 1000));
-        tvSteps.setText(String.valueOf(stepCount));
-        tvCalories.setText(String.valueOf(calculateCalories()));
-        if (totalDistance > 0) {
-            long elapsed = System.currentTimeMillis() - startTime - pausedDuration;
-            double pace = (elapsed / 60000.0) / (totalDistance / 1000);
-            int paceMin = (int) pace;
-            int paceSec = (int) ((pace - paceMin) * 60);
-            tvPace.setText(String.format(Locale.CHINA, "%d:%02d", paceMin, paceSec));
-        }
-    }
-
-
-    // ========== 峰值检测计步算法（校园跑核心） ==========
     @Override
     public void onSensorChanged(SensorEvent event) {
         switch (event.sensor.getType()) {
             case Sensor.TYPE_ACCELEROMETER:
                 gravity = event.values.clone();
                 updateCompass();
-                if (!useSystemStepCounter && isRunning && !isPaused) {
-                    detectStepPeakDetection(event);
+                // 更新步数显示（从服务获取）
+                if (serviceBound && runningService != null && runningService.isRunning()) {
+                    tvSteps.setText(String.valueOf(runningService.getStepCount()));
                 }
                 break;
             case Sensor.TYPE_MAGNETIC_FIELD:
                 geomagnetic = event.values.clone();
                 updateCompass();
                 break;
-            case Sensor.TYPE_STEP_COUNTER:
-                if (useSystemStepCounter && isRunning && !isPaused) {
-                    int total = (int) event.values[0];
-                    if (initialStepCount < 0) initialStepCount = total;
-                    stepCount = total - initialStepCount;
-                    tvSteps.setText(String.valueOf(stepCount));
-                }
-                break;
         }
-    }
-
-    // 超灵敏计步算法 - 简单有效
-    private void detectStepPeakDetection(SensorEvent event) {
-        float x = event.values[0];
-        float y = event.values[1];
-        float z = event.values[2];
-        
-        // 计算加速度向量模
-        float magnitude = (float) Math.sqrt(x * x + y * y + z * z);
-        
-        // 计算与重力的差值（检测运动）
-        float delta = Math.abs(magnitude - SensorManager.GRAVITY_EARTH);
-        
-        long currentTimeMs = System.currentTimeMillis();
-        
-        // 超简单的峰值检测：上升后下降就算一步
-        if (!isRising && delta > STEP_THRESHOLD && delta > lastMagnitude) {
-            isRising = true;
-        } else if (isRising && delta < lastMagnitude) {
-            isRising = false;
-            // 检查步间隔
-            if (currentTimeMs - lastStepTimeMs > MIN_STEP_INTERVAL_MS) {
-                stepCountManual++;
-                stepCount = stepCountManual;
-                lastStepTimeMs = currentTimeMs;
-                
-                if (tvSteps != null) {
-                    tvSteps.setText(String.valueOf(stepCount));
-                }
-                Log.d(TAG, "Step detected! count=" + stepCount + ", delta=" + delta);
-            }
-        }
-        
-        lastMagnitude = delta;
     }
 
     private void updateCompass() {
@@ -526,10 +374,13 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
             SensorManager.getOrientation(R, orientation);
             float azimuth = (float) Math.toDegrees(orientation[0]);
             azimuth = (azimuth + 360) % 360;
-            RotateAnimation ra = new RotateAnimation(currentDegree, -azimuth, Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f);
+            RotateAnimation ra = new RotateAnimation(currentDegree, -azimuth,
+                    Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f);
             ra.setDuration(200);
             ra.setFillAfter(true);
-            ivCompass.startAnimation(ra);
+            if (ivCompass != null) {
+                ivCompass.startAnimation(ra);
+            }
             currentDegree = -azimuth;
         }
     }
@@ -538,20 +389,24 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
     @Override
+    public void onStart() {
+        super.onStart();
+        // 尝试绑定已存在的服务
+        Intent serviceIntent = new Intent(requireContext(), RunningService.class);
+        requireContext().bindService(serviceIntent, serviceConnection, 0);
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         try {
             if (mapView != null) mapView.onResume();
             if (sensorManager != null) {
-                // 使用SENSOR_DELAY_FASTEST获取更精确的计步数据
-                if (accelerometer != null) 
+                if (accelerometer != null)
                     sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_FASTEST);
-                if (magnetometer != null) 
+                if (magnetometer != null)
                     sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
-                if (stepCounter != null) 
-                    sensorManager.registerListener(this, stepCounter, SensorManager.SENSOR_DELAY_FASTEST);
             }
-            if (locationClient != null) locationClient.startLocation();
         } catch (Exception e) {
             Log.e(TAG, "onResume error", e);
         }
@@ -563,9 +418,22 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         try {
             if (mapView != null) mapView.onPause();
             if (sensorManager != null) sensorManager.unregisterListener(this);
-            if (locationClient != null) locationClient.stopLocation();
         } catch (Exception e) {
             Log.e(TAG, "onPause error", e);
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        // 解绑服务但不停止服务
+        if (serviceBound) {
+            try {
+                requireContext().unbindService(serviceConnection);
+            } catch (Exception e) {
+                Log.e(TAG, "unbindService error", e);
+            }
+            serviceBound = false;
         }
     }
 
@@ -574,8 +442,6 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         super.onDestroy();
         try {
             if (mapView != null) mapView.onDestroy();
-            if (locationClient != null) locationClient.onDestroy();
-            handler.removeCallbacks(timerRunnable);
         } catch (Exception e) {
             Log.e(TAG, "onDestroy error", e);
         }
@@ -596,9 +462,14 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         if (requestCode == PERMISSION_REQUEST_CODE) {
             boolean granted = true;
             for (int r : grantResults) {
-                if (r != PackageManager.PERMISSION_GRANTED) { granted = false; break; }
+                if (r != PackageManager.PERMISSION_GRANTED) {
+                    granted = false;
+                    break;
+                }
             }
-            if (granted) initLocation();
+            if (!granted) {
+                Toast.makeText(requireContext(), "需要位置权限才能记录跑步轨迹", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }

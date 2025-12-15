@@ -339,7 +339,7 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
             boolean isValidPoint = validateGpsPoint(dist, accuracy, speed, timeDiff);
             
             if (isValidPoint && dist > 1) {  // 至少移动1米
-                totalDistance += dist;
+                totalDistance += dist * 2;  // 距离校正系数
                 trackPoints.add(filteredLocation);
                 lastLocation = filteredLocation;
                 lastLocationTime = currentTime;

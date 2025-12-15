@@ -11,7 +11,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 
@@ -21,7 +23,7 @@ public class StatsFragment extends Fragment {
     private TextView tvTotalDistance, tvTotalTimes, tvTotalDuration;
     private TextView tvTotalSteps, tvTotalCalories, tvAvgPace;
     private TextView tvWeekDistance, tvWeekTimes, tvWeekCalories;
-    private RunDataManager dataManager;
+    private DatabaseHelper dbHelper;
 
     @Nullable
     @Override
@@ -29,7 +31,7 @@ public class StatsFragment extends Fragment {
         View view = null;
         try {
             view = inflater.inflate(R.layout.fragment_stats, container, false);
-            dataManager = new RunDataManager(requireContext());
+            dbHelper = DatabaseHelper.getInstance(requireContext());
             initViews(view);
         } catch (Exception e) {
             Log.e(TAG, "onCreateView error", e);
@@ -61,9 +63,10 @@ public class StatsFragment extends Fragment {
     }
 
     private void loadStats() {
-        if (dataManager == null) return;
+        if (dbHelper == null) return;
         
-        List<RunDataManager.RunRecord> records = dataManager.getRecords();
+        // 从SQLite数据库读取跑步记录
+        List<DatabaseHelper.RunningRecord> records = dbHelper.getAllRunningRecords();
         if (records == null) records = new ArrayList<>();
         
         double totalDist = 0;
@@ -71,11 +74,41 @@ public class StatsFragment extends Fragment {
         int totalSteps = 0;
         int totalCal = 0;
         
-        for (RunDataManager.RunRecord r : records) {
+        // 本周统计
+        double weekDist = 0;
+        int weekTimes = 0;
+        int weekCal = 0;
+        
+        // 获取本周开始日期
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.DAY_OF_WEEK, cal.getFirstDayOfWeek());
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        long weekStartTime = cal.getTimeInMillis();
+        
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA);
+        
+        for (DatabaseHelper.RunningRecord r : records) {
             totalDist += r.distance;
             totalDur += r.duration;
             totalSteps += r.steps;
             totalCal += r.calories;
+            
+            // 判断是否是本周记录
+            try {
+                long recordTime = sdf.parse(r.date).getTime();
+                if (recordTime >= weekStartTime) {
+                    weekDist += r.distance;
+                    weekTimes++;
+                    weekCal += r.calories;
+                }
+            } catch (Exception e) {
+                // 解析失败，算作本周
+                weekDist += r.distance;
+                weekTimes++;
+                weekCal += r.calories;
+            }
         }
         
         int count = records.size();
@@ -91,8 +124,9 @@ public class StatsFragment extends Fragment {
         int paceSec = (int) ((avgPace - paceMin) * 60);
         if (tvAvgPace != null) tvAvgPace.setText(String.format(Locale.CHINA, "%d:%02d", paceMin, paceSec));
         
-        if (tvWeekDistance != null) tvWeekDistance.setText(String.format(Locale.CHINA, "%.1f", totalDist / 1000));
-        if (tvWeekTimes != null) tvWeekTimes.setText(String.valueOf(count));
-        if (tvWeekCalories != null) tvWeekCalories.setText(String.valueOf(totalCal));
+        // 本周统计
+        if (tvWeekDistance != null) tvWeekDistance.setText(String.format(Locale.CHINA, "%.1f", weekDist / 1000));
+        if (tvWeekTimes != null) tvWeekTimes.setText(String.valueOf(weekTimes));
+        if (tvWeekCalories != null) tvWeekCalories.setText(String.valueOf(weekCal));
     }
 }

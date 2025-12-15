@@ -11,8 +11,6 @@ import java.util.List;
 public class RunDataManager {
     private static final String PREF_NAME = "running_data";
     private static final String KEY_RECORDS = "records";
-    private static final int MAX_RECORDS = 3;
-    
     private SharedPreferences prefs;
     private Gson gson;
 
@@ -24,9 +22,7 @@ public class RunDataManager {
     public void saveRecord(RunRecord record) {
         List<RunRecord> records = getRecords();
         records.add(0, record);
-        if (records.size() > MAX_RECORDS) {
-            records = records.subList(0, MAX_RECORDS);
-        }
+        // 不再限制记录数量，所有数据保存到SQLite
         String json = gson.toJson(records);
         prefs.edit().putString(KEY_RECORDS, json).apply();
     }

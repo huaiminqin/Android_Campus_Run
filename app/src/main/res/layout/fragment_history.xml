@@ -21,11 +21,36 @@
             android:textStyle="bold"/>
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/tv_empty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="暂无跑步记录\n开始你的第一次跑步吧!"
+        android:textColor="@color/text_secondary"
+        android:textSize="16sp"
+        android:visibility="gone"/>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_history"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:padding="12dp"
         android:clipToPadding="false"/>
+
+    <TextView
+        android:id="@+id/btn_load_more"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="12dp"
+        android:background="?attr/selectableItemBackground"
+        android:gravity="center"
+        android:text="▼ 查看更早记录"
+        android:textColor="@color/primary"
+        android:textSize="14sp"
+        android:visibility="gone"/>
 
 </LinearLayout>

@@ -20,9 +20,16 @@ import java.util.Locale;
 public class HistoryFragment extends Fragment {
 
     private static final String TAG = "HistoryFragment";
+    private static final int DEFAULT_SHOW_COUNT = 3;  // 默认显示3条
+    
     private RecyclerView rvHistory;
-    private RunDataManager dataManager;
-    private List<RunDataManager.RunRecord> records = new ArrayList<>();
+    private TextView tvEmpty;
+    private TextView btnLoadMore;
+    private DatabaseHelper dbHelper;
+    private List<DatabaseHelper.RunningRecord> allRecords = new ArrayList<>();
+    private List<DatabaseHelper.RunningRecord> displayRecords = new ArrayList<>();
+    private boolean isExpanded = false;
+    private HistoryAdapter adapter;
 
     @Nullable
     @Override
@@ -30,10 +37,17 @@ public class HistoryFragment extends Fragment {
         View view = null;
         try {
             view = inflater.inflate(R.layout.fragment_history, container, false);
-            dataManager = new RunDataManager(requireContext());
+            dbHelper = DatabaseHelper.getInstance(requireContext());
             rvHistory = view.findViewById(R.id.rv_history);
+            tvEmpty = view.findViewById(R.id.tv_empty);
+            btnLoadMore = view.findViewById(R.id.btn_load_more);
+            
             if (rvHistory != null) {
                 rvHistory.setLayoutManager(new LinearLayoutManager(requireContext()));
+            }
+            
+            if (btnLoadMore != null) {
+                btnLoadMore.setOnClickListener(v -> toggleExpand());
             }
         } catch (Exception e) {
             Log.e(TAG, "onCreateView error", e);
@@ -44,14 +58,77 @@ public class HistoryFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        loadData();
+    }
+    
+    private void loadData() {
         try {
-            if (dataManager != null && rvHistory != null) {
-                records = dataManager.getRecords();
-                if (records == null) records = new ArrayList<>();
-                rvHistory.setAdapter(new HistoryAdapter());
+            if (dbHelper != null && rvHistory != null) {
+                allRecords = dbHelper.getAllRunningRecords();
+                if (allRecords == null) allRecords = new ArrayList<>();
+                
+                Log.d(TAG, "从SQLite加载记录数: " + allRecords.size());
+                
+                // 显示空状态提示
+                if (tvEmpty != null) {
+                    tvEmpty.setVisibility(allRecords.isEmpty() ? View.VISIBLE : View.GONE);
+                }
+                rvHistory.setVisibility(allRecords.isEmpty() ? View.GONE : View.VISIBLE);
+                
+                // 更新显示列表
+                updateDisplayRecords();
+                
+                // 显示/隐藏加载更多按钮
+                updateLoadMoreButton();
+                
+                adapter = new HistoryAdapter();
+                rvHistory.setAdapter(adapter);
             }
         } catch (Exception e) {
-            Log.e(TAG, "onResume error", e);
+            Log.e(TAG, "loadData error", e);
+        }
+    }
+    
+    private void updateDisplayRecords() {
+        displayRecords.clear();
+        if (isExpanded || allRecords.size() <= DEFAULT_SHOW_COUNT) {
+            displayRecords.addAll(allRecords);
+        } else {
+            displayRecords.addAll(allRecords.subList(0, DEFAULT_SHOW_COUNT));
+        }
+    }
+    
+    private void updateLoadMoreButton() {
+        if (btnLoadMore != null) {
+            if (allRecords.size() > DEFAULT_SHOW_COUNT) {
+                btnLoadMore.setVisibility(View.VISIBLE);
+                int hiddenCount = allRecords.size() - DEFAULT_SHOW_COUNT;
+                if (isExpanded) {
+                    btnLoadMore.setText("▲ 收起历史记录");
+                } else {
+                    btnLoadMore.setText("▼ 查看更早记录 (" + hiddenCount + "条)");
+                }
+            } else {
+                btnLoadMore.setVisibility(View.GONE);
+            }
+        }
+    }
+    
+    private void toggleExpand() {
+        isExpanded = !isExpanded;
+        updateDisplayRecords();
+        updateLoadMoreButton();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+        
+        // 展开时滚动到底部，收起时滚动到顶部
+        if (rvHistory != null) {
+            if (isExpanded) {
+                rvHistory.scrollToPosition(displayRecords.size() - 1);
+            } else {
+                rvHistory.scrollToPosition(0);
+            }
         }
     }
 
@@ -66,7 +143,7 @@ public class HistoryFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            RunDataManager.RunRecord record = records.get(position);
+            DatabaseHelper.RunningRecord record = displayRecords.get(position);
             holder.tvDate.setText(record.date);
             holder.tvDistance.setText(String.format(Locale.CHINA, "%.2f 公里", record.distance / 1000.0));
             
@@ -84,7 +161,7 @@ public class HistoryFragment extends Fragment {
 
         @Override
         public int getItemCount() {
-            return records != null ? records.size() : 0;
+            return displayRecords != null ? displayRecords.size() : 0;
         }
 
         class ViewHolder extends RecyclerView.ViewHolder {

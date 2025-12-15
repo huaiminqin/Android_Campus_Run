@@ -19,12 +19,14 @@ public class SurveyActivity extends AppCompatActivity {
     private SeekBar sbSatisfaction;
     private TextView tvSatisfactionValue;
     private EditText etSuggestion;
+    private DatabaseHelper dbHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_survey);
 
+        dbHelper = DatabaseHelper.getInstance(this);
         initViews();
     }
 
@@ -75,11 +77,24 @@ public class SurveyActivity extends AppCompatActivity {
             return;
         }
 
-        String result = String.format(Locale.CHINA,
-            "问卷提交成功!\n跑步频率: %s\n跑步目的: %s\n满意度: %d分\n建议: %s",
-            frequency, purpose, satisfaction, suggestion.isEmpty() ? "无" : suggestion);
+        // 保存到SQLite数据库
+        long result = dbHelper.insertSurveyResult(
+            1,  // 默认用户ID
+            frequency,
+            purpose,
+            satisfaction,
+            suggestion
+        );
 
-        Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+        if (result > 0) {
+            String msg = String.format(Locale.CHINA,
+                "问卷提交成功!\n跑步频率: %s\n跑步目的: %s\n满意度: %d分\n建议: %s",
+                frequency, purpose, satisfaction, suggestion.isEmpty() ? "无" : suggestion);
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(this, "保存失败，请重试", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         // 重置并返回
         rgFrequency.clearCheck();

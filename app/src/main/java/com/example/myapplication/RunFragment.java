@@ -96,6 +96,7 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
     private Handler handler = new Handler(Looper.getMainLooper());
     private Runnable timerRunnable;
     private RunDataManager dataManager;
+    private DatabaseHelper dbHelper;
 
 
     @Nullable
@@ -104,6 +105,7 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         View view = inflater.inflate(R.layout.fragment_run, container, false);
         
         dataManager = new RunDataManager(requireContext());
+        dbHelper = DatabaseHelper.getInstance(requireContext());
         initPrivacy();
         initViews(view);
         initMap(view, savedInstanceState);
@@ -273,6 +275,21 @@ public class RunFragment extends Fragment implements AMapLocationListener, Senso
         }
 
         String date = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(new Date());
+        
+        // 保存到SQLite数据库
+        long insertId = dbHelper.insertRunningRecord(
+            1,  // 默认用户ID
+            date,
+            totalDistance,
+            duration,
+            stepCount,
+            calories,
+            pace,
+            trackStr.toString()
+        );
+        Log.d(TAG, "保存到SQLite, insertId=" + insertId);
+        
+        // 同时保存到SharedPreferences（兼容旧版本）
         RunDataManager.RunRecord record = new RunDataManager.RunRecord(date, totalDistance, duration, stepCount, calories, pace, trackStr.toString());
         dataManager.saveRecord(record);
 

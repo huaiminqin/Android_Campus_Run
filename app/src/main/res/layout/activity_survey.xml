@@ -2,7 +2,8 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5">
+    android:background="@color/bg_main">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -11,27 +12,31 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:background="#4CAF50"
+            android:background="@color/primary"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="16dp">
+            android:paddingHorizontal="16dp"
+            android:elevation="4dp">
+
             <Button
                 android:id="@+id/btn_back"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
                 android:background="@android:color/transparent"
                 android:text="返回"
-                android:textColor="#FFFFFF"
-                android:textSize="16sp"/>
+                android:textColor="@color/white"
+                android:textSize="14sp"/>
+
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="center"
                 android:text="跑步习惯调查问卷"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/white"
                 android:textSize="18sp"
                 android:textStyle="bold"/>
+
             <View
                 android:layout_width="48dp"
                 android:layout_height="1dp"/>
@@ -41,152 +46,176 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="20dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="1. 您的跑步频率是?"
-                android:textColor="#333333"
-                android:textSize="16sp"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
                 android:textStyle="bold"/>
+
             <RadioGroup
                 android:id="@+id/rg_frequency"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="12dp"
                 android:orientation="vertical">
+
                 <RadioButton
                     android:id="@+id/rb_freq_1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#333333"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary"
                     android:text="每天"/>
+
                 <RadioButton
                     android:id="@+id/rb_freq_2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#333333"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary"
                     android:text="每周3-5次"/>
+
                 <RadioButton
                     android:id="@+id/rb_freq_3"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#333333"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary"
                     android:text="每周1-2次"/>
+
                 <RadioButton
                     android:id="@+id/rb_freq_4"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#333333"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary"
                     android:text="偶尔跑步"/>
             </RadioGroup>
 
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginVertical="16dp"
-                android:background="#DDDDDD"/>
+                android:layout_marginVertical="20dp"
+                android:background="@color/gray_light"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="2. 您跑步的主要目的是?"
-                android:textColor="#333333"
-                android:textSize="16sp"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
                 android:textStyle="bold"/>
+
             <RadioGroup
                 android:id="@+id/rg_purpose"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="12dp"
                 android:orientation="vertical">
+
                 <RadioButton
                     android:id="@+id/rb_purpose_1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#333333"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary"
                     android:text="减肥瘦身"/>
+
                 <RadioButton
                     android:id="@+id/rb_purpose_2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#333333"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary"
                     android:text="强身健体"/>
+
                 <RadioButton
                     android:id="@+id/rb_purpose_3"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#333333"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary"
                     android:text="释放压力"/>
+
                 <RadioButton
                     android:id="@+id/rb_purpose_4"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#333333"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary"
                     android:text="参加比赛"/>
             </RadioGroup>
 
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginVertical="16dp"
-                android:background="#DDDDDD"/>
+                android:layout_marginVertical="20dp"
+                android:background="@color/gray_light"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="3. 您对本APP的满意度 (1-10分)"
-                android:textColor="#333333"
-                android:textSize="16sp"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
                 android:textStyle="bold"/>
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="16dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
+
                 <SeekBar
                     android:id="@+id/sb_satisfaction"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:max="10"
-                    android:progress="5"/>
+                    android:progress="5"
+                    android:progressTint="@color/primary"
+                    android:thumbTint="@color/primary"/>
+
                 <TextView
                     android:id="@+id/tv_satisfaction_value"
-                    android:layout_width="60dp"
+                    android:layout_width="56dp"
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:text="5 分"
-                    android:textColor="#4CAF50"
-                    android:textSize="18sp"
+                    android:textColor="@color/primary"
+                    android:textSize="16sp"
                     android:textStyle="bold"/>
             </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginVertical="16dp"
-                android:background="#DDDDDD"/>
+                android:layout_marginVertical="20dp"
+                android:background="@color/gray_light"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="4. 您的建议 (选填)"
-                android:textColor="#333333"
-                android:textSize="16sp"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
                 android:textStyle="bold"/>
+
             <EditText
                 android:id="@+id/et_suggestion"
                 android:layout_width="match_parent"
-                android:layout_height="120dp"
-                android:layout_marginTop="8dp"
+                android:layout_height="100dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/bg_edittext"
                 android:gravity="top"
                 android:hint="请输入您的宝贵建议..."
-                android:textColor="#333333"
-                android:textColorHint="#999999"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_hint"
                 android:inputType="textMultiLine"
                 android:padding="12dp"/>
 
@@ -194,11 +223,11 @@
                 android:id="@+id/btn_submit_survey"
                 android:layout_width="match_parent"
                 android:layout_height="50dp"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="28dp"
                 android:background="@drawable/btn_start_bg"
                 android:text="提交问卷"
-                android:textColor="#FFFFFF"
-                android:textSize="16sp"/>
+                android:textColor="@color/white"
+                android:textSize="15sp"/>
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

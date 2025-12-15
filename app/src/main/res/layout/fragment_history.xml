@@ -3,22 +3,29 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F5F5F5">
+    android:background="@color/bg_main">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#4CAF50"
-        android:padding="16dp"
-        android:text="跑步历史"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold"/>
+        android:layout_height="56dp"
+        android:background="@color/primary"
+        android:gravity="center"
+        android:elevation="4dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="跑步历史"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"/>
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_history"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="8dp"/>
+        android:padding="12dp"
+        android:clipToPadding="false"/>
 
 </LinearLayout>

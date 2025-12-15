@@ -1,5 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 现代化配色方案 -->
+    <color name="primary">#5B9BD5</color>
+    <color name="primary_dark">#4A89C4</color>
+    <color name="primary_light">#A8D1F0</color>
+    <color name="accent">#7EB8DA</color>
+    
+    <!-- 背景色 -->
+    <color name="bg_main">#F5F7FA</color>
+    <color name="bg_card">#FFFFFF</color>
+    <color name="bg_header">#E8F4FC</color>
+    
+    <!-- 文字颜色 -->
+    <color name="text_primary">#2C3E50</color>
+    <color name="text_secondary">#7F8C8D</color>
+    <color name="text_hint">#BDC3C7</color>
+    
+    <!-- 功能色 -->
+    <color name="success">#27AE60</color>
+    <color name="warning">#F39C12</color>
+    <color name="error">#E74C3C</color>
+    <color name="info">#3498DB</color>
+    
+    <!-- 米色系 -->
+    <color name="beige">#F5F5DC</color>
+    <color name="beige_light">#FFFEF0</color>
+    
+    <!-- 浅灰系 -->
+    <color name="gray_light">#ECF0F1</color>
+    <color name="gray_medium">#BDC3C7</color>
+    <color name="gray_dark">#95A5A6</color>
+    
+    <!-- 淡蓝系 -->
+    <color name="blue_light">#E3F2FD</color>
+    <color name="blue_soft">#BBDEFB</color>
+    <color name="blue_accent">#64B5F6</color>
+    
+    <!-- 底部导航 -->
+    <color name="nav_selected">#5B9BD5</color>
+    <color name="nav_unselected">#95A5A6</color>
+    
+    <!-- 兼容旧代码 -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>

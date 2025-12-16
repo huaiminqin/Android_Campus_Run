@@ -1,12 +1,15 @@
 package com.example.myapplication;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -29,14 +32,71 @@ public class ToolsFragment extends Fragment implements SensorEventListener {
 
     private static final String TAG = "ToolsFragment";
     private EditText etCalcDistance, etCalcTime, etWeight, etCalDistance;
-    private TextView tvCalcResult, tvCaloriesResult, tvDirection;
+    private TextView tvCalcResult, tvCaloriesResult, tvDirection, tvSyncStatus;
     private ImageView ivCompass;
+    private Button btnSync;
 
     private SensorManager sensorManager;
     private Sensor accelerometer, magnetometer;
     private float[] gravity = new float[3];
     private float[] geomagnetic = new float[3];
     private float currentDegree = 0f;
+    
+    private SyncService syncService;
+    private boolean syncServiceBound = false;
+    private DatabaseHelper dbHelper;
+
+    private ServiceConnection syncConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            SyncService.SyncBinder binder = (SyncService.SyncBinder) service;
+            syncService = binder.getService();
+            syncServiceBound = true;
+            updateSyncStatus();
+            
+            syncService.setSyncListener(new SyncService.SyncListener() {
+                @Override
+                public void onSyncStarted() {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (btnSync != null) btnSync.setEnabled(false);
+                            if (tvSyncStatus != null) tvSyncStatus.setText("同步中...");
+                        });
+                    }
+                }
+
+                @Override
+                public void onSyncProgress(int completed, int total) {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (tvSyncStatus != null) {
+                                tvSyncStatus.setText(String.format(Locale.CHINA, 
+                                    "同步中 %d/%d", completed, total));
+                            }
+                        });
+                    }
+                }
+
+                @Override
+                public void onSyncCompleted(int successCount, int failCount) {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (btnSync != null) btnSync.setEnabled(true);
+                            updateSyncStatus();
+                            Toast.makeText(requireContext(), 
+                                String.format(Locale.CHINA, "同步完成: %d成功, %d失败", 
+                                    successCount, failCount), Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                }
+            });
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            syncServiceBound = false;
+        }
+    };
 
     @Nullable
     @Override
@@ -44,6 +104,7 @@ public class ToolsFragment extends Fragment implements SensorEventListener {
         View view = null;
         try {
             view = inflater.inflate(R.layout.fragment_tools, container, false);
+            dbHelper = DatabaseHelper.getInstance(requireContext());
             initViews(view);
             initSensors();
         } catch (Exception e) {
@@ -85,8 +146,34 @@ public class ToolsFragment extends Fragment implements SensorEventListener {
                     }
                 });
             }
+            
+            // 同步状态
+            tvSyncStatus = view.findViewById(R.id.tv_sync_status);
+            btnSync = view.findViewById(R.id.btn_sync);
+            if (btnSync != null) {
+                btnSync.setOnClickListener(v -> doSync());
+            }
         } catch (Exception e) {
             Log.e(TAG, "initViews error", e);
+        }
+    }
+    
+    private void updateSyncStatus() {
+        if (tvSyncStatus != null && dbHelper != null) {
+            int count = dbHelper.getUnsyncedCount();
+            if (count > 0) {
+                tvSyncStatus.setText(String.format(Locale.CHINA, "待同步: %d条记录", count));
+            } else {
+                tvSyncStatus.setText("已全部同步");
+            }
+        }
+    }
+    
+    private void doSync() {
+        if (syncServiceBound && syncService != null) {
+            syncService.syncPendingRecords();
+        } else {
+            Toast.makeText(requireContext(), "同步服务未就绪", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -206,6 +293,11 @@ public class ToolsFragment extends Fragment implements SensorEventListener {
                 if (magnetometer != null) 
                     sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
             }
+            // 绑定同步服务
+            Intent intent = new Intent(requireContext(), SyncService.class);
+            requireContext().bindService(intent, syncConnection, Context.BIND_AUTO_CREATE);
+            
+            updateSyncStatus();
         } catch (Exception e) {
             Log.e(TAG, "onResume error", e);
         }
@@ -217,6 +309,11 @@ public class ToolsFragment extends Fragment implements SensorEventListener {
         try {
             if (sensorManager != null) {
                 sensorManager.unregisterListener(this);
+            }
+            // 解绑同步服务
+            if (syncServiceBound) {
+                requireContext().unbindService(syncConnection);
+                syncServiceBound = false;
             }
         } catch (Exception e) {
             Log.e(TAG, "onPause error", e);

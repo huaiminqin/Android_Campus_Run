@@ -39,6 +39,12 @@ import com.amap.api.maps.model.LatLng;
 import com.amap.api.maps.model.Polyline;
 import com.amap.api.maps.model.PolylineOptions;
 
+import com.example.myapplication.api.ApiCallback;
+import com.example.myapplication.api.AuthManager;
+import com.example.myapplication.api.RunningRecordApi;
+import com.example.myapplication.api.RunningRecordDto;
+import com.example.myapplication.api.UserInfo;
+
 import java.util.List;
 import java.util.Locale;
 
@@ -255,9 +261,14 @@ public class RunFragment extends Fragment implements SensorEventListener {
         if (serviceBound && runningService != null) {
             RunningService.RunResult result = runningService.stopRunning();
             
+            // 获取当前用户ID
+            AuthManager authManager = AuthManager.getInstance(requireContext());
+            UserInfo user = authManager.getCurrentUser();
+            int userId = user != null && user.getId() != null ? user.getId() : 1;
+            
             // 保存到SQLite数据库（使用服务中的步数）
             long insertId = dbHelper.insertRunningRecord(
-                1, result.date, result.distance, result.duration,
+                userId, result.date, result.distance, result.duration,
                 result.steps, result.calories, result.pace, result.track
             );
             Log.d(TAG, "保存到SQLite, insertId=" + insertId);
@@ -268,6 +279,9 @@ public class RunFragment extends Fragment implements SensorEventListener {
                 result.steps, result.calories, result.pace, result.track
             );
             dataManager.saveRecord(record);
+
+            // 尝试上传到服务器
+            uploadToServer(insertId, userId, result);
 
             String msg = String.format(Locale.CHINA, "跑步结束!\n距离: %.2f公里\n步数: %d\n消耗: %d千卡",
                     result.distance / 1000, result.steps, result.calories);
@@ -289,6 +303,42 @@ public class RunFragment extends Fragment implements SensorEventListener {
         tvPace.setText("0:00");
         tvSteps.setText("0");
         tvCalories.setText("0");
+    }
+
+    /**
+     * 上传跑步记录到服务器
+     */
+    private void uploadToServer(long localId, int userId, RunningService.RunResult result) {
+        RunningRecordDto dto = new RunningRecordDto();
+        dto.setUserId(userId);
+        dto.setDate(result.date);
+        dto.setDistance(result.distance);
+        dto.setDuration(result.duration);
+        dto.setSteps(result.steps);
+        dto.setCalories(result.calories);
+        dto.setPace(result.pace);
+        dto.setTrack(result.track);
+
+        RunningRecordApi.getInstance().uploadRecord(dto, new ApiCallback<RunningRecordDto>() {
+            @Override
+            public void onSuccess(RunningRecordDto data) {
+                if (data != null && data.getId() != null) {
+                    // 标记为已同步
+                    dbHelper.markAsSynced((int) localId, data.getId());
+                    Log.d(TAG, "上传成功, serverId=" + data.getId());
+                }
+            }
+
+            @Override
+            public void onError(int code, String message) {
+                Log.w(TAG, "上传失败: " + message + ", 稍后重试");
+            }
+
+            @Override
+            public void onNetworkError(Exception e) {
+                Log.w(TAG, "网络错误, 稍后重试: " + e.getMessage());
+            }
+        });
     }
 
     private void restoreUIState() {

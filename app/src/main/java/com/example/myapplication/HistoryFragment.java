@@ -5,6 +5,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -12,6 +13,12 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.example.myapplication.api.ApiCallback;
+import com.example.myapplication.api.AuthManager;
+import com.example.myapplication.api.RunningRecordApi;
+import com.example.myapplication.api.RunningRecordDto;
+import com.example.myapplication.api.UserInfo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +32,9 @@ public class HistoryFragment extends Fragment {
     private RecyclerView rvHistory;
     private TextView tvEmpty;
     private TextView btnLoadMore;
+    private ProgressBar progressBar;
     private DatabaseHelper dbHelper;
+    private AuthManager authManager;
     private List<DatabaseHelper.RunningRecord> allRecords = new ArrayList<>();
     private List<DatabaseHelper.RunningRecord> displayRecords = new ArrayList<>();
     private boolean isExpanded = false;
@@ -38,9 +47,11 @@ public class HistoryFragment extends Fragment {
         try {
             view = inflater.inflate(R.layout.fragment_history, container, false);
             dbHelper = DatabaseHelper.getInstance(requireContext());
+            authManager = AuthManager.getInstance(requireContext());
             rvHistory = view.findViewById(R.id.rv_history);
             tvEmpty = view.findViewById(R.id.tv_empty);
             btnLoadMore = view.findViewById(R.id.btn_load_more);
+            progressBar = view.findViewById(R.id.progress_bar);
             
             if (rvHistory != null) {
                 rvHistory.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -62,6 +73,13 @@ public class HistoryFragment extends Fragment {
     }
     
     private void loadData() {
+        // 先显示本地数据
+        loadLocalData();
+        // 然后尝试从服务器获取
+        fetchFromServer();
+    }
+    
+    private void loadLocalData() {
         try {
             if (dbHelper != null && rvHistory != null) {
                 allRecords = dbHelper.getAllRunningRecords();
@@ -85,8 +103,76 @@ public class HistoryFragment extends Fragment {
                 rvHistory.setAdapter(adapter);
             }
         } catch (Exception e) {
-            Log.e(TAG, "loadData error", e);
+            Log.e(TAG, "loadLocalData error", e);
         }
+    }
+    
+    private void fetchFromServer() {
+        if (!authManager.isLoggedIn()) {
+            return;
+        }
+        
+        UserInfo user = authManager.getCurrentUser();
+        Integer userId = user != null ? user.getId() : null;
+        
+        if (progressBar != null) {
+            progressBar.setVisibility(View.VISIBLE);
+        }
+        
+        RunningRecordApi.getInstance().getRecords(userId, 1, 50, 
+            new ApiCallback<RunningRecordApi.PageResponse<RunningRecordDto>>() {
+                @Override
+                public void onSuccess(RunningRecordApi.PageResponse<RunningRecordDto> data) {
+                    if (progressBar != null) {
+                        progressBar.setVisibility(View.GONE);
+                    }
+                    
+                    if (data != null && data.getRecords() != null) {
+                        // 更新本地缓存
+                        for (RunningRecordDto dto : data.getRecords()) {
+                            DatabaseHelper.RunningRecord record = dtoToRecord(dto);
+                            dbHelper.insertOrUpdateFromServer(record);
+                        }
+                        // 重新加载本地数据
+                        loadLocalData();
+                        Log.d(TAG, "从服务器同步了 " + data.getRecords().size() + " 条记录");
+                    }
+                }
+
+                @Override
+                public void onError(int code, String message) {
+                    if (progressBar != null) {
+                        progressBar.setVisibility(View.GONE);
+                    }
+                    Log.w(TAG, "从服务器获取数据失败: " + message);
+                }
+
+                @Override
+                public void onNetworkError(Exception e) {
+                    if (progressBar != null) {
+                        progressBar.setVisibility(View.GONE);
+                    }
+                    Log.w(TAG, "网络错误，使用本地缓存: " + e.getMessage());
+                }
+            });
+    }
+    
+    private DatabaseHelper.RunningRecord dtoToRecord(RunningRecordDto dto) {
+        DatabaseHelper.RunningRecord record = new DatabaseHelper.RunningRecord();
+        record.serverId = dto.getId();
+        record.userId = dto.getUserId() != null ? dto.getUserId() : 1;
+        record.date = dto.getDate();
+        record.distance = dto.getDistance() != null ? dto.getDistance() : 0;
+        record.duration = dto.getDuration() != null ? dto.getDuration() : 0;
+        record.steps = dto.getSteps() != null ? dto.getSteps() : 0;
+        record.calories = dto.getCalories() != null ? dto.getCalories() : 0;
+        record.pace = dto.getPace() != null ? dto.getPace() : 0;
+        record.track = dto.getTrack();
+        record.isSynced = true;
+        record.semesterId = dto.getSemesterId();
+        record.taskId = dto.getTaskId();
+        record.isValid = dto.getIsValid();
+        return record;
     }
     
     private void updateDisplayRecords() {

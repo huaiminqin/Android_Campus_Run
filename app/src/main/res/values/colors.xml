@@ -40,6 +40,9 @@
     <color name="nav_selected">#5B9BD5</color>
     <color name="nav_unselected">#95A5A6</color>
     
+    <!-- 新任务高亮背景 -->
+    <color name="new_task_bg">#FFF8E1</color>
+    
     <!-- 兼容旧代码 -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>

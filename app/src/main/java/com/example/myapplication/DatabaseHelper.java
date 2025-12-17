@@ -183,7 +183,35 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public List<RunningRecord> getAllRunningRecords() {
-        return getRunningRecords(1); // 默认用户ID为1
+        // 获取所有记录（不按用户过滤，用于调试）
+        List<RunningRecord> records = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_RUNNING_RECORDS, null, 
+                null, null, 
+                null, null, RECORD_DATE + " DESC");
+        
+        while (cursor.moveToNext()) {
+            records.add(cursorToRunningRecord(cursor));
+        }
+        cursor.close();
+        return records;
+    }
+    
+    /**
+     * 获取当前登录用户的跑步记录（用户数据隔离）
+     */
+    public List<RunningRecord> getRunningRecordsByUserId(int userId) {
+        List<RunningRecord> records = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_RUNNING_RECORDS, null, 
+                RECORD_USER_ID + "=?", new String[]{String.valueOf(userId)}, 
+                null, null, RECORD_DATE + " DESC");
+        
+        while (cursor.moveToNext()) {
+            records.add(cursorToRunningRecord(cursor));
+        }
+        cursor.close();
+        return records;
     }
 
     // ==================== 同步相关操作 ====================
@@ -282,6 +310,33 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             // 插入新记录
             return db.insert(TABLE_RUNNING_RECORDS, null, values);
         }
+    }
+    
+    /**
+     * 删除本地存在但服务器上已删除的记录
+     * @param userId 用户ID
+     * @param serverIds 服务器上存在的记录ID集合
+     */
+    public int deleteRecordsNotInServer(int userId, java.util.Set<Integer> serverIds) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        
+        // 如果服务器返回空列表，不删除本地记录（可能是网络问题）
+        if (serverIds == null || serverIds.isEmpty()) {
+            return 0;
+        }
+        
+        // 构建 NOT IN 条件
+        StringBuilder inClause = new StringBuilder();
+        for (Integer id : serverIds) {
+            if (inClause.length() > 0) inClause.append(",");
+            inClause.append(id);
+        }
+        
+        // 删除该用户的、已同步的、但不在服务器列表中的记录
+        String whereClause = RECORD_USER_ID + "=? AND " + RECORD_IS_SYNCED + "=1 AND " + 
+                RECORD_SERVER_ID + " IS NOT NULL AND " + RECORD_SERVER_ID + " NOT IN (" + inClause + ")";
+        
+        return db.delete(TABLE_RUNNING_RECORDS, whereClause, new String[]{String.valueOf(userId)});
     }
 
     // ==================== 问卷相关操作 ====================

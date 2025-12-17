@@ -320,7 +320,7 @@ public class RunFragment extends Fragment implements SensorEventListener {
         dto.setPace(result.pace);
         dto.setTrack(result.track);
 
-        Log.d(TAG, "上传数据: distance=" + dto.getDistance() + "km, duration=" + dto.getDuration() + "s");
+        Log.d(TAG, "上传数据: distance=" + dto.getDistance() + "km, duration=" + dto.getDuration() + "s, steps=" + dto.getSteps() + ", calories=" + dto.getCalories());
 
         RunningRecordApi.getInstance().uploadRecord(dto, new ApiCallback<RunningRecordDto>() {
             @Override
@@ -378,11 +378,18 @@ public class RunFragment extends Fragment implements SensorEventListener {
             int calories = (int) (weight * (dist / 1000) * 1.036);
             tvCalories.setText(String.valueOf(calories));
             
-            if (dist > 0) {
-                long elapsed = System.currentTimeMillis() - runningService.getStartTime() - runningService.getPausedDuration();
-                double pace = (elapsed / 60000.0) / (dist / 1000);
+            // 使用服务提供的实时配速（基于GPS速度，更准确）
+            double pace = runningService.getRealtimePace();
+            if (pace > 0) {
                 int paceMin = (int) pace;
                 int paceSec = (int) ((pace - paceMin) * 60);
+                tvPace.setText(String.format(Locale.CHINA, "%d:%02d", paceMin, paceSec));
+            } else if (dist > 0) {
+                // 备用：使用平均配速
+                long elapsed = System.currentTimeMillis() - runningService.getStartTime() - runningService.getPausedDuration();
+                double avgPace = (elapsed / 60000.0) / (dist / 1000);
+                int paceMin = (int) avgPace;
+                int paceSec = (int) ((avgPace - paceMin) * 60);
                 tvPace.setText(String.format(Locale.CHINA, "%d:%02d", paceMin, paceSec));
             }
         }

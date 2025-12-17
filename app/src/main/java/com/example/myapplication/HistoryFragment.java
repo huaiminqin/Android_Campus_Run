@@ -82,10 +82,16 @@ public class HistoryFragment extends Fragment {
     private void loadLocalData() {
         try {
             if (dbHelper != null && rvHistory != null) {
-                allRecords = dbHelper.getAllRunningRecords();
+                // 用户数据隔离：只加载当前登录用户的记录
+                int currentUserId = getCurrentUserId();
+                if (currentUserId > 0) {
+                    allRecords = dbHelper.getRunningRecordsByUserId(currentUserId);
+                } else {
+                    allRecords = new ArrayList<>();
+                }
                 if (allRecords == null) allRecords = new ArrayList<>();
                 
-                Log.d(TAG, "从SQLite加载记录数: " + allRecords.size());
+                Log.d(TAG, "从SQLite加载用户" + currentUserId + "的记录数: " + allRecords.size());
                 
                 // 显示空状态提示
                 if (tvEmpty != null) {
@@ -107,6 +113,19 @@ public class HistoryFragment extends Fragment {
         }
     }
     
+    /**
+     * 获取当前登录用户ID
+     */
+    private int getCurrentUserId() {
+        if (authManager != null && authManager.isLoggedIn()) {
+            UserInfo user = authManager.getCurrentUser();
+            if (user != null && user.getId() != null) {
+                return user.getId();
+            }
+        }
+        return -1; // 未登录返回-1
+    }
+    
     private void fetchFromServer() {
         if (!authManager.isLoggedIn()) {
             return;
@@ -119,7 +138,8 @@ public class HistoryFragment extends Fragment {
             progressBar.setVisibility(View.VISIBLE);
         }
         
-        RunningRecordApi.getInstance().getRecords(userId, 1, 50, 
+        // 获取足够多的记录以确保同步删除正确（增加到200条）
+        RunningRecordApi.getInstance().getRecords(userId, 1, 200, 
             new ApiCallback<RunningRecordApi.PageResponse<RunningRecordDto>>() {
                 @Override
                 public void onSuccess(RunningRecordApi.PageResponse<RunningRecordDto> data) {
@@ -128,11 +148,25 @@ public class HistoryFragment extends Fragment {
                     }
                     
                     if (data != null && data.getRecords() != null) {
-                        // 更新本地缓存
+                        // 收集服务器上的所有记录ID
+                        java.util.Set<Integer> serverIds = new java.util.HashSet<>();
                         for (RunningRecordDto dto : data.getRecords()) {
+                            if (dto.getId() != null) {
+                                serverIds.add(dto.getId());
+                            }
+                            // 更新本地缓存
                             DatabaseHelper.RunningRecord record = dtoToRecord(dto);
                             dbHelper.insertOrUpdateFromServer(record);
                         }
+                        
+                        // 删除本地存在但服务器上已删除的记录
+                        if (userId != null && !serverIds.isEmpty()) {
+                            int deleted = dbHelper.deleteRecordsNotInServer(userId, serverIds);
+                            if (deleted > 0) {
+                                Log.d(TAG, "删除了 " + deleted + " 条服务器已删除的本地记录");
+                            }
+                        }
+                        
                         // 重新加载本地数据
                         loadLocalData();
                         Log.d(TAG, "从服务器同步了 " + data.getRecords().size() + " 条记录");

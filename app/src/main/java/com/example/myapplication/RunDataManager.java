@@ -34,6 +34,14 @@ public class RunDataManager {
         return records != null ? records : new ArrayList<>();
     }
 
+    /**
+     * 清除所有缓存的跑步记录
+     * 用于用户登出时清除数据
+     */
+    public void clearRecords() {
+        prefs.edit().remove(KEY_RECORDS).apply();
+    }
+
     public static class RunRecord {
         public String date;
         public double distance;

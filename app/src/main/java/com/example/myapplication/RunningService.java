@@ -151,10 +151,13 @@ public class RunningService extends Service implements AMapLocationListener, Sen
             locationClient.setLocationListener(this);
             AMapLocationClientOption option = new AMapLocationClientOption();
             option.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);
-            option.setInterval(1000);
+            // 减小定位间隔到500ms，提高轨迹实时性和配速计算精度
+            option.setInterval(500);
             option.setNeedAddress(false);
             // 启用后台定位
             option.setLocationCacheEnable(false);
+            // 启用传感器辅助定位，提高精度
+            option.setSensorEnable(true);
             locationClient.setLocationOption(option);
             // 启用后台定位模式
             locationClient.enableBackgroundLocation(NOTIFICATION_ID, createNotification());
@@ -218,6 +221,9 @@ public class RunningService extends Service implements AMapLocationListener, Sen
         lastMagnitude = 0;
         isRising = false;
         
+        // 重置配速窗口
+        resetPaceWindow();
+        
         if (locationClient != null) {
             locationClient.startLocation();
         }
@@ -280,8 +286,13 @@ public class RunningService extends Service implements AMapLocationListener, Sen
             Log.d(TAG, "WakeLock released");
         }
 
+        // 计算时长（确保不为负数）
         long elapsed = System.currentTimeMillis() - startTime - pausedDuration;
+        if (elapsed < 0) elapsed = 0;
         int duration = (int) (elapsed / 1000);
+        
+        Log.d(TAG, "停止跑步: startTime=" + startTime + ", pausedDuration=" + pausedDuration + ", elapsed=" + elapsed + ", duration=" + duration + "s");
+        
         int calories = calculateCalories();
         double pace = totalDistance > 0 ? (duration / 60.0) / (totalDistance / 1000) : 0;
         
@@ -310,39 +321,104 @@ public class RunningService extends Service implements AMapLocationListener, Sen
         double lat = location.getLatitude();
         double lng = location.getLongitude();
         float accuracy = location.getAccuracy();
-        float speed = location.getSpeed();
+        float speed = location.getSpeed(); // GPS提供的速度 (m/s)
         long currentTime = System.currentTimeMillis();
         
-        LatLng filteredLocation = applyKalmanFilter(lat, lng, accuracy, currentTime);
+        // 使用原始位置进行显示（提高实时性），使用滤波位置计算距离
+        LatLng rawLocation = new LatLng(lat, lng);
         
         if (lastLocation == null) {
-            trackPoints.add(filteredLocation);
-            lastLocation = filteredLocation;
+            // 第一个点：初始化
+            trackPoints.add(rawLocation);
+            lastLocation = rawLocation;
             lastLocationTime = currentTime;
             lastSpeed = speed;
+            // 初始化卡尔曼滤波
+            kalmanLat = lat;
+            kalmanLng = lng;
+            kalmanVariance = accuracy * accuracy;
+            kalmanInitialized = true;
             if (listener != null) {
-                listener.onLocationUpdate(filteredLocation, trackPoints);
+                listener.onLocationUpdate(rawLocation, trackPoints);
             }
             return;
         }
         
-        double dist = calculateDistance(lastLocation, filteredLocation);
+        // 计算原始距离（用于距离累计）
+        double rawDist = calculateDistance(lastLocation, rawLocation);
         long timeDiff = currentTime - lastLocationTime;
         
-        boolean isValidPoint = validateGpsPoint(dist, accuracy, speed, timeDiff);
+        // 使用GPS速度计算距离（更准确）
+        double gpsBasedDist = speed * timeDiff / 1000.0; // 转换为米
         
-        if (isValidPoint && dist > 1) {
-            totalDistance += dist * 2;
-            trackPoints.add(filteredLocation);
-            lastLocation = filteredLocation;
+        // 验证GPS点有效性（放宽条件）
+        boolean isValidPoint = accuracy < 30 && timeDiff > 0;
+        
+        // 防止异常跳跃：如果计算距离远大于GPS速度推算的距离，使用GPS速度
+        double finalDist = rawDist;
+        if (speed > 0.5 && rawDist > gpsBasedDist * 2) {
+            // 距离异常，使用GPS速度推算
+            finalDist = gpsBasedDist;
+        }
+        
+        // 过滤静止状态的噪声
+        if (speed < 0.3 && rawDist < 3) {
+            // 几乎静止，不更新
+            return;
+        }
+        
+        // 过滤异常高速（超过12m/s约43km/h）
+        double calcSpeed = timeDiff > 0 ? (rawDist / timeDiff * 1000) : 0;
+        if (calcSpeed > 12) {
+            return;
+        }
+        
+        if (isValidPoint) {
+            // 始终添加到轨迹（提高轨迹实时性）
+            trackPoints.add(rawLocation);
+            
+            // 累计距离（使用校正后的距离）
+            if (finalDist > 0.5) {
+                totalDistance += finalDist;
+                
+                // 使用GPS速度计算实时配速（更准确）
+                if (speed > 0.5) {
+                    // 配速 = 1000 / speed / 60 (分钟/公里)
+                    // speed是m/s，转换为分钟/公里
+                    realtimePace = (1000.0 / speed) / 60.0;
+                    realtimePace = Math.max(MIN_PACE, Math.min(MAX_PACE, realtimePace));
+                }
+                
+                if (listener != null) {
+                    listener.onDistanceUpdate(totalDistance);
+                }
+            }
+            
+            lastLocation = rawLocation;
             lastLocationTime = currentTime;
             lastSpeed = speed;
             
+            // 更新UI位置
             if (listener != null) {
-                listener.onDistanceUpdate(totalDistance);
-                listener.onLocationUpdate(filteredLocation, trackPoints);
+                listener.onLocationUpdate(rawLocation, trackPoints);
             }
         }
+    }
+    
+    // 实时配速（分钟/公里）- 基于GPS速度计算
+    private double realtimePace = 0;
+    private static final double MIN_PACE = 2.0;  // 最快2分钟/公里
+    private static final double MAX_PACE = 30.0; // 最慢30分钟/公里
+    
+    public double getRealtimePace() {
+        return realtimePace;
+    }
+    
+    /**
+     * 重置配速（跑步开始时调用）
+     */
+    private void resetPaceWindow() {
+        realtimePace = 0;
     }
 
     private LatLng applyKalmanFilter(double lat, double lng, float accuracy, long timestamp) {

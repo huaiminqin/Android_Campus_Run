@@ -49,6 +49,16 @@
             android:exported="false"
             android:screenOrientation="portrait" />
         
+        <activity
+            android:name=".AnnouncementsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        
+        <activity
+            android:name=".TasksActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        
         <meta-data 
             android:name="com.amap.api.v2.apikey"
             android:value="88c3f43b9b16ee1f83f6ffa65beb8439" />

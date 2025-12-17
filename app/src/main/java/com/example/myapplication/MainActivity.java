@@ -1,20 +1,31 @@
 package com.example.myapplication;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.TextView;
+
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import com.amap.api.location.AMapLocationClient;
 import com.amap.api.maps.MapsInitializer;
+import com.example.myapplication.api.AnnouncementApi;
+import com.example.myapplication.api.AnnouncementDto;
+import com.example.myapplication.api.ApiCallback;
 import com.example.myapplication.api.AuthManager;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
+    private static final String PREF_LAST_ANNOUNCEMENT_ID = "last_announcement_id";
     private BottomNavigationView bottomNav;
     private AuthManager authManager;
 
@@ -77,9 +88,55 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 });
             }
+            
+            // 检查新公告
+            checkNewAnnouncements();
         } catch (Exception e) {
             Log.e(TAG, "onCreate error", e);
         }
+    }
+    
+    private void checkNewAnnouncements() {
+        AnnouncementApi.getInstance().getAnnouncements(new ApiCallback<List<AnnouncementDto>>() {
+            @Override
+            public void onSuccess(List<AnnouncementDto> data) {
+                if (data != null && !data.isEmpty()) {
+                    // 获取最新公告
+                    AnnouncementDto latest = data.get(0);
+                    SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+                    int lastId = prefs.getInt(PREF_LAST_ANNOUNCEMENT_ID, 0);
+                    
+                    // 如果有新公告，显示弹窗
+                    if (latest.getId() != null && latest.getId() > lastId) {
+                        runOnUiThread(() -> showNewAnnouncementDialog(latest));
+                        // 保存已读ID
+                        prefs.edit().putInt(PREF_LAST_ANNOUNCEMENT_ID, latest.getId()).apply();
+                    }
+                }
+            }
+
+            @Override
+            public void onError(int code, String message) {
+                Log.w(TAG, "Check announcements failed: " + message);
+            }
+
+            @Override
+            public void onNetworkError(Exception e) {
+                Log.w(TAG, "Check announcements network error");
+            }
+        });
+    }
+    
+    private void showNewAnnouncementDialog(AnnouncementDto announcement) {
+        new AlertDialog.Builder(this)
+                .setTitle("📢 新公告")
+                .setMessage(announcement.getTitle() + "\n\n" + announcement.getContent())
+                .setPositiveButton("查看全部", (dialog, which) -> {
+                    startActivity(new Intent(this, AnnouncementsActivity.class));
+                })
+                .setNegativeButton("知道了", null)
+                .setCancelable(false)
+                .show();
     }
 
     private void loadFragment(Fragment fragment) {

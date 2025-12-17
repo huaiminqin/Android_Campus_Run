@@ -280,6 +280,94 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- 公告和任务入口 -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/white">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="16dp">
+
+                <FrameLayout
+                    android:id="@+id/btn_announcements"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="12dp">
+
+                        <ImageView
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:src="@drawable/ic_announcement"
+                            app:tint="@color/info" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="公告通知"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <View
+                        android:id="@+id/badge_announcement"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_gravity="end|top"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginEnd="24dp"
+                        android:background="@drawable/bg_badge_red"
+                        android:visibility="gone" />
+                </FrameLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="match_parent"
+                    android:background="@color/gray_light" />
+
+                <LinearLayout
+                    android:id="@+id/btn_tasks"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="12dp"
+                    android:background="?attr/selectableItemBackground">
+
+                    <ImageView
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_task"
+                        app:tint="@color/warning" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="跑步任务"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -328,7 +416,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="16dp"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="16dp"
             app:cardCornerRadius="16dp"
             app:cardElevation="2dp"
             app:cardBackgroundColor="@color/white">
@@ -364,6 +452,43 @@
                     android:layout_marginTop="16dp"
                     android:background="@drawable/btn_start_bg"
                     android:text="立即同步"
+                    android:textColor="@color/white"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 退出登录 -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/white">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:id="@+id/tv_user_info"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="当前用户: --"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/btn_logout"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/btn_logout_bg"
+                    android:text="退出登录"
                     android:textColor="@color/white"
                     android:textSize="14sp" />
             </LinearLayout>

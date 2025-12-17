@@ -4,6 +4,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -26,15 +27,22 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.example.myapplication.api.AnnouncementApi;
+import com.example.myapplication.api.AnnouncementDto;
+import com.example.myapplication.api.ApiCallback;
+
+import java.util.List;
 import java.util.Locale;
 
 public class ToolsFragment extends Fragment implements SensorEventListener {
 
     private static final String TAG = "ToolsFragment";
+    private static final String PREF_LAST_SEEN_ANNOUNCEMENT = "last_seen_announcement_id";
     private EditText etCalcDistance, etCalcTime, etWeight, etCalDistance;
     private TextView tvCalcResult, tvCaloriesResult, tvDirection, tvSyncStatus;
     private ImageView ivCompass;
     private Button btnSync;
+    private View badgeAnnouncement;
 
     private SensorManager sensorManager;
     private Sensor accelerometer, magnetometer;
@@ -134,6 +142,40 @@ public class ToolsFragment extends Fragment implements SensorEventListener {
             ivCompass = view.findViewById(R.id.iv_compass);
             tvDirection = view.findViewById(R.id.tv_direction);
 
+            // 公告入口和红点
+            badgeAnnouncement = view.findViewById(R.id.badge_announcement);
+            View btnAnnouncements = view.findViewById(R.id.btn_announcements);
+            if (btnAnnouncements != null) {
+                btnAnnouncements.setOnClickListener(v -> {
+                    try {
+                        // 点击后隐藏红点并记录已读
+                        if (badgeAnnouncement != null) {
+                            badgeAnnouncement.setVisibility(View.GONE);
+                        }
+                        Intent intent = new Intent(requireContext(), AnnouncementsActivity.class);
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Open announcements error", e);
+                    }
+                });
+            }
+            
+            // 检查新公告
+            checkNewAnnouncements();
+
+            // 任务入口
+            View btnTasks = view.findViewById(R.id.btn_tasks);
+            if (btnTasks != null) {
+                btnTasks.setOnClickListener(v -> {
+                    try {
+                        Intent intent = new Intent(requireContext(), TasksActivity.class);
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Open tasks error", e);
+                    }
+                });
+            }
+
             // 调查问卷入口
             Button btnOpenSurvey = view.findViewById(R.id.btn_open_survey);
             if (btnOpenSurvey != null) {
@@ -152,6 +194,36 @@ public class ToolsFragment extends Fragment implements SensorEventListener {
             btnSync = view.findViewById(R.id.btn_sync);
             if (btnSync != null) {
                 btnSync.setOnClickListener(v -> doSync());
+            }
+            
+            // 用户信息和退出登录
+            TextView tvUserInfo = view.findViewById(R.id.tv_user_info);
+            Button btnLogout = view.findViewById(R.id.btn_logout);
+            
+            // 显示当前用户
+            com.example.myapplication.api.AuthManager authManager = 
+                    com.example.myapplication.api.AuthManager.getInstance(requireContext());
+            com.example.myapplication.api.UserInfo user = authManager.getCurrentUser();
+            if (tvUserInfo != null && user != null) {
+                String displayName = user.getNickname() != null ? user.getNickname() : user.getUsername();
+                tvUserInfo.setText("当前用户: " + displayName);
+            }
+            
+            if (btnLogout != null) {
+                btnLogout.setOnClickListener(v -> {
+                    new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                            .setTitle("退出登录")
+                            .setMessage("确定要退出登录吗？")
+                            .setPositiveButton("确定", (dialog, which) -> {
+                                authManager.logout();
+                                Intent intent = new Intent(requireContext(), LoginActivity.class);
+                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                                startActivity(intent);
+                                requireActivity().finish();
+                            })
+                            .setNegativeButton("取消", null)
+                            .show();
+                });
             }
         } catch (Exception e) {
             Log.e(TAG, "initViews error", e);
@@ -175,6 +247,37 @@ public class ToolsFragment extends Fragment implements SensorEventListener {
         } else {
             Toast.makeText(requireContext(), "同步服务未就绪", Toast.LENGTH_SHORT).show();
         }
+    }
+    
+    private void checkNewAnnouncements() {
+        AnnouncementApi.getInstance().getAnnouncements(new ApiCallback<List<AnnouncementDto>>() {
+            @Override
+            public void onSuccess(List<AnnouncementDto> data) {
+                if (data != null && !data.isEmpty() && getActivity() != null) {
+                    AnnouncementDto latest = data.get(0);
+                    SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+                    int lastSeenId = prefs.getInt(PREF_LAST_SEEN_ANNOUNCEMENT, 0);
+                    
+                    if (latest.getId() != null && latest.getId() > lastSeenId) {
+                        getActivity().runOnUiThread(() -> {
+                            if (badgeAnnouncement != null) {
+                                badgeAnnouncement.setVisibility(View.VISIBLE);
+                            }
+                        });
+                    }
+                }
+            }
+
+            @Override
+            public void onError(int code, String message) {
+                Log.w(TAG, "Check announcements failed: " + message);
+            }
+
+            @Override
+            public void onNetworkError(Exception e) {
+                Log.w(TAG, "Check announcements network error");
+            }
+        });
     }
 
     private void initSensors() {

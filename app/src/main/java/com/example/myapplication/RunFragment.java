@@ -312,12 +312,15 @@ public class RunFragment extends Fragment implements SensorEventListener {
         RunningRecordDto dto = new RunningRecordDto();
         dto.setUserId(userId);
         dto.setDate(result.date);
-        dto.setDistance(result.distance);
+        // 将米转换为公里
+        dto.setDistance(result.distance / 1000.0);
         dto.setDuration(result.duration);
         dto.setSteps(result.steps);
         dto.setCalories(result.calories);
         dto.setPace(result.pace);
         dto.setTrack(result.track);
+
+        Log.d(TAG, "上传数据: distance=" + dto.getDistance() + "km, duration=" + dto.getDuration() + "s");
 
         RunningRecordApi.getInstance().uploadRecord(dto, new ApiCallback<RunningRecordDto>() {
             @Override

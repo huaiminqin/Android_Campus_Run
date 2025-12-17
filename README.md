@@ -8,7 +8,7 @@
 
 ### APK下载
 
-下载 `app/release/app-debug.apk` 安装使用即可。不建议下载realse版本
+下载 `app-debug.apk` 安装使用即可。不建议下载realse版本
 
 ### 在线访问
 
